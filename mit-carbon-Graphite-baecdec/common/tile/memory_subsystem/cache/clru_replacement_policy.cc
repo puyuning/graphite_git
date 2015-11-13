@@ -1,0 +1,96 @@
+//#include "lru_replacement_policy.h"
+#include "clru_replacement_policy.h"
+#include "cache_line_info.h"
+#include "log.h"
+#include <vector>
+CLRUReplacementPolicy::CLRUReplacementPolicy(UInt32 cache_size, UInt32 associativity, UInt32 cache_line_size)
+   : CacheReplacementPolicy(cache_size, associativity, cache_line_size)
+{
+   _lru_bits_vec.resize(_num_sets);
+   for (UInt32 set_num = 0; set_num < _num_sets; set_num ++)
+   {
+      vector<UInt8>& lru_bits = _lru_bits_vec[set_num];
+      lru_bits.resize(_associativity);
+      for (UInt32 way_num = 0; way_num < _associativity; way_num ++)
+      {
+         lru_bits[way_num] = way_num;
+      }
+   }
+}
+
+CLRUReplacementPolicy::~CLRUReplacementPolicy()
+{}
+
+vector<UInt32>
+CLRUReplacementPolicy::getReplacementWay(CacheLineInfo** cache_line_info_array, UInt32 set_num,/*ShememMsg::*/PrL1ShL2MSI:: ShmemMsg* shmem_msg )
+{
+   vector<UInt32> s;
+   const vector<UInt8>& lru_bits = _lru_bits_vec[set_num];
+   // Invalidations may mess up the LRU bits
+   UInt32 way = _associativity;
+   for (UInt32 i = 0; i < _associativity; i++)
+   {
+      if (!cache_line_info_array[i]->isValid())
+    {
+         s.push_back(i);
+         return s;
+         //return i;
+     }
+      else if (lru_bits[i] == (_associativity-1))
+         way = i;
+   }
+   LOG_ASSERT_ERROR(way < _associativity, "Error Finding LRU bits");
+   //return way;
+   //return way;
+   s.push_back(way);
+   return s;
+}
+UInt32
+CLRUReplacementPolicy::getReplacementWay(CacheLineInfo** cache_line_info_array, UInt32 set_num )
+{
+   //vector<UInt32> s;
+   const vector<UInt8>& lru_bits = _lru_bits_vec[set_num];
+   // Invalidations may mess up the LRU bits
+   UInt32 way = _associativity;
+   for (UInt32 i = 0; i < _associativity; i++)
+   {
+      if (!cache_line_info_array[i]->isValid())
+         {
+         //s.push_back(i);
+         //return s;
+          return i;
+         }
+      else if (lru_bits[i] == (_associativity-1))
+         way = i;
+   }
+   LOG_ASSERT_ERROR(way < _associativity, "Error Finding LRU bits");
+   
+   //s.push_back(way);
+   //return s; 
+   return way;
+}
+void
+CLRUReplacementPolicy::update(CacheLineInfo** cache_line_info_array, UInt32 set_num, vector<UInt32> accessed_way)
+{
+
+   //UInt32 way = accessed_way[0];
+   vector<UInt8>& lru_bits = _lru_bits_vec[set_num];
+   for (UInt32 i = 0; i < _associativity; i++)
+   {
+      if (lru_bits[i] < lru_bits[accessed_way[0]])
+         lru_bits[i] ++;
+   }
+   lru_bits[accessed_way[0]] = 0;
+}
+void
+CLRUReplacementPolicy::update(CacheLineInfo** cache_line_info_array, UInt32 set_num, UInt32 accessed_way)
+{
+   vector<UInt8>& lru_bits = _lru_bits_vec[set_num];
+   for (UInt32 i = 0; i < _associativity; i++)
+   {
+      if (lru_bits[i] < lru_bits[accessed_way])
+         lru_bits[i] ++;
+   }
+   lru_bits[accessed_way] = 0;
+}
+
